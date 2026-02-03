@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "name": "vnc-platform",
+  "public": false,
+
+  "buildCommand": "echo \"Frontend build handled separately\"",
+  "outputDirectory": "frontend/build",
+
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
+    }
+  ],
+
+  "functions": {},
+  "crons": []
+}
