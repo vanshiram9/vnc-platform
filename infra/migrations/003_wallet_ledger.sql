@@ -1,15 +1,16 @@
 -- ============================================================
--- VNC PLATFORM — WALLET & LEDGER (HARDENED)
+-- VNC PLATFORM — WALLET & LEDGER (DB-HARDENED)
 -- Migration: 003_wallet_ledger.sql
--- Version: v6.7.0.4
+-- Final Master Hard-Lock Version: v6.7.0.4
 -- ============================================================
 
 BEGIN;
 
--- ENUMS (unchanged)
+-- ENUM TYPES
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname='ledger_entry_type') THEN
-    CREATE TYPE ledger_entry_type AS ENUM ('CREDIT','DEBIT','LOCK','UNLOCK','FEE','REVERSAL');
+    CREATE TYPE ledger_entry_type AS ENUM
+      ('CREDIT','DEBIT','LOCK','UNLOCK','FEE','REVERSAL');
   END IF;
 END $$;
 
@@ -19,7 +20,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- WALLETS (unchanged structure)
+-- WALLETS (NO BALANCE)
 CREATE TABLE IF NOT EXISTS public.wallets (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -31,26 +32,23 @@ CREATE TABLE IF NOT EXISTS public.wallets (
   CONSTRAINT uq_wallet_user_currency UNIQUE (user_id, currency)
 );
 
--- LEDGER (HARDENED)
+-- LEDGER (APPEND ONLY + HASH CHAIN)
 CREATE TABLE IF NOT EXISTS public.ledger_entries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   wallet_id UUID NOT NULL REFERENCES public.wallets(id) ON DELETE CASCADE,
   entry_type ledger_entry_type NOT NULL,
   amount NUMERIC(24,8) NOT NULL CHECK (amount >= 0),
-
   prev_hash TEXT NOT NULL,
   entry_hash TEXT NOT NULL UNIQUE,
-
   reference_type VARCHAR(64),
   reference_id UUID,
-
   created_at TIMESTAMPTZ NOT NULL DEFAULT now_utc()
 );
 
 CREATE INDEX IF NOT EXISTS idx_ledger_wallet_time
   ON public.ledger_entries(wallet_id, created_at);
 
--- HASH COMPUTATION
+-- HASH COMPUTE
 CREATE OR REPLACE FUNCTION compute_ledger_hash(
   _wallet_id UUID,
   _entry_type ledger_entry_type,
@@ -68,11 +66,10 @@ LANGUAGE SQL IMMUTABLE AS $$
   );
 $$;
 
--- ENFORCE CHAIN CONTINUITY
+-- CHAIN ENFORCEMENT
 CREATE OR REPLACE FUNCTION enforce_ledger_chain()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
-DECLARE
-  last_hash TEXT;
+DECLARE last_hash TEXT;
 BEGIN
   SELECT entry_hash INTO last_hash
   FROM public.ledger_entries
@@ -91,7 +88,10 @@ BEGIN
   END IF;
 
   IF NEW.entry_hash <>
-     compute_ledger_hash(NEW.wallet_id,NEW.entry_type,NEW.amount,NEW.prev_hash,NEW.created_at)
+     compute_ledger_hash(
+       NEW.wallet_id, NEW.entry_type,
+       NEW.amount, NEW.prev_hash, NEW.created_at
+     )
   THEN
     RAISE EXCEPTION 'INVALID_LEDGER_HASH';
   END IF;
@@ -100,12 +100,11 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_ledger_chain ON public.ledger_entries;
 CREATE TRIGGER trg_ledger_chain
 BEFORE INSERT ON public.ledger_entries
 FOR EACH ROW EXECUTE FUNCTION enforce_ledger_chain();
 
--- IMMUTABILITY
+-- IMMUTABLE
 CREATE OR REPLACE FUNCTION forbid_ledger_mutation()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -113,7 +112,6 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_ledger_no_update ON public.ledger_entries;
 CREATE TRIGGER trg_ledger_no_update
 BEFORE UPDATE OR DELETE ON public.ledger_entries
 FOR EACH ROW EXECUTE FUNCTION forbid_ledger_mutation();
