@@ -1,0 +1,84 @@
+VNC PLATFORM LICENSE
+Version: v6.7.0.4
+Effective Date: 2026-02-03
+
+Copyright (c) 2026
+All rights reserved.
+
+----------------------------------------------------------------
+1. DEFINITIONS
+----------------------------------------------------------------
+"Software" refers to the VNC Platform repository, including but not
+limited to source code, documentation, configuration files, and
+architectural artifacts.
+
+"Owner" refers to the legal and authoritative controller of the
+VNC Platform.
+
+"Hard-Lock Architecture" refers to the immutability guarantees defined
+in architecture.lock.json.
+
+----------------------------------------------------------------
+2. LICENSE GRANT
+----------------------------------------------------------------
+Permission is hereby granted to view, audit, and deploy the Software
+for evaluation, compliance review, and approved production use,
+subject to the following conditions:
+
+- No modification of backend logic
+- No removal or alteration of security, ledger, or governance layers
+- No bypass of zero-trust enforcement
+- No redistribution as an open-source project
+
+----------------------------------------------------------------
+3. RESTRICTIONS
+----------------------------------------------------------------
+You MAY NOT:
+- Add new features without Owner authorization
+- Modify or remove existing files under hard-lock
+- Reverse engineer security mechanisms
+- Use the Software for unlawful or non-compliant activities
+- Re-license or sub-license the Software
+
+----------------------------------------------------------------
+4. OWNERSHIP
+----------------------------------------------------------------
+All intellectual property rights in the Software remain the exclusive
+property of the Owner.
+
+No rights are transferred except those explicitly granted herein.
+
+----------------------------------------------------------------
+5. WARRANTY DISCLAIMER
+----------------------------------------------------------------
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+----------------------------------------------------------------
+6. LIMITATION OF LIABILITY
+----------------------------------------------------------------
+IN NO EVENT SHALL THE OWNER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+----------------------------------------------------------------
+7. TERMINATION
+----------------------------------------------------------------
+This license is automatically terminated if any term is violated.
+Upon termination, all use of the Software must cease immediately.
+
+----------------------------------------------------------------
+8. GOVERNING LAW
+----------------------------------------------------------------
+This License shall be governed and construed in accordance with the
+laws applicable to the Owner's jurisdiction.
+
+----------------------------------------------------------------
+9. FINAL CLAUSE
+----------------------------------------------------------------
+This License is inseparable from the Hard-Lock Architecture.
+Any attempt to bypass or weaken the hard-lock invalidates this License.
+
+VNC PLATFORM — HARD-LOCKED. AUDITABLE. CONTROLLED.
