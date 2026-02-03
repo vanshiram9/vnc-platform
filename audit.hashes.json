@@ -43,15 +43,106 @@
       "status": "SEALED"
     },
 
-    "docs/*": {
+    "docs/architecture.md": {
       "hash": "PENDING_AFTER_FINAL_CONTENT",
       "status": "TO_BE_SEALED"
     },
-    "infra/*": {
+    "docs/security-model.md": {
       "hash": "PENDING_AFTER_FINAL_CONTENT",
       "status": "TO_BE_SEALED"
     },
-    "final/*": {
+    "docs/economic-model.md": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "docs/compliance-manual.md": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "docs/regulator-pack.md": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "docs/admin-ops-manual.md": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "docs/import-export-manual.md": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "docs/threat-model.md": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+
+    "infra/render.yaml": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/vercel.json": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/env/production.env": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/env/staging.env": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/monitoring/uptime.slo.ts": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/monitoring/alert.rules.ts": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+
+    "infra/migrations/001_init.sql": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/migrations/002_users.sql": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/migrations/003_wallet_ledger.sql": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/migrations/004_kyc.sql": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/migrations/005_trade_escrow.sql": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/migrations/006_import_export.sql": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/migrations/007_faq_support.sql": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/migrations/008_audit_reports.sql": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+
+    "final/system.freeze.ts": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "final/historical.seal.ts": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "final/trust.recovery.protocol.ts": {
       "hash": "PENDING_AFTER_FINAL_CONTENT",
       "status": "TO_BE_SEALED"
     }
