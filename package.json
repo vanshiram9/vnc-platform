@@ -1,0 +1,43 @@
+{
+  "name": "vnc-platform",
+  "version": "6.7.0.4",
+  "private": true,
+  "description": "VNC Platform — Hard-Locked, Zero-Trust, Audit-First Infrastructure",
+  "license": "UNLICENSED",
+  "author": "VNC Platform Owner",
+  "repository": {
+    "type": "git",
+    "url": "RESTRICTED"
+  },
+  "keywords": [
+    "vnc",
+    "zero-trust",
+    "hard-lock",
+    "ledger",
+    "compliance",
+    "audit"
+  ],
+  "engines": {
+    "node": ">=18.18.0",
+    "npm": ">=9.8.0"
+  },
+  "scripts": {
+    "preinstall": "node -e \"console.log('VNC Platform — Hard-Lock enforced');\"",
+    "audit:tree": "node ./scripts/verify-tree.js",
+    "audit:hashes": "node ./scripts/verify-hashes.js",
+    "build:backend": "npm --prefix backend run build",
+    "start:backend": "npm --prefix backend run start",
+    "lint": "npm --prefix backend run lint",
+    "test": "npm --prefix backend run test",
+    "verify": "npm run audit:tree && npm run audit:hashes"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "dependencies": {},
+  "devDependencies": {},
+  "auditConfig": {
+    "production": true
+  }
+}
