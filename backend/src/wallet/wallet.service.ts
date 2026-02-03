@@ -1,10 +1,15 @@
-// backend/src/wallet/wallet.service.ts
+// ============================================================
+// VNC PLATFORM — WALLET SERVICE
+// File: backend/src/wallet/wallet.service.ts
+// Grade: BANK + MILITARY + RBI
+// FINAL MASTER HARD-LOCK v6.7.0.4
+// ============================================================
 
 import {
   Injectable,
-  BadRequestException,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,10 +18,8 @@ import { Wallet } from './wallet.entity';
 import { LedgerEntry } from './ledger.entry';
 
 import { UsersService } from '../users/users.service';
-import { KycService } from '../kyc/kyc.service';
-import { RiskAction, evaluateRisk } from '../core/risk.matrix';
-import { FeatureFlag } from '../core/feature.flags';
-import { getCountryRule } from '../core/country.rules';
+import { ZeroTrustGate } from '../security/zero.trust';
+import { KillSwitch } from '../owner/kill.switch';
 
 @Injectable()
 export class WalletService {
@@ -26,186 +29,168 @@ export class WalletService {
     @InjectRepository(LedgerEntry)
     private readonly ledgerRepo: Repository<LedgerEntry>,
     private readonly usersService: UsersService,
-    private readonly kycService: KycService,
+    private readonly killSwitch: KillSwitch,
   ) {}
 
-  /**
-   * Fetch wallet by user identifier
-   * Ensures wallet existence
-   */
-  async getWalletByIdentifier(identifier: string): Promise<Wallet> {
-    const user = await this.usersService.getByIdentifier(identifier);
+  /* ---------------------------------------------------------- */
+  /* WALLET FETCH (NO AUTO-MUTATION)                             */
+  /* ---------------------------------------------------------- */
 
-    let wallet = await this.walletRepo.findOne({
-      where: { userId: user.id },
+  async getWallet(
+    userId: string,
+    currency: string,
+  ): Promise<Wallet> {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new NotFoundException('USER_NOT_FOUND');
+
+    // 🔒 ZERO TRUST — READ ALSO VERIFIED
+    const zt = new ZeroTrustGate(this.killSwitch);
+    const decision = zt.verify({
+      userId: user.id,
+      role: user.role,
+      userFrozen: user.isFrozen,
+      action: 'WALLET',
+    });
+
+    if (!decision.allowed) {
+      throw new ForbiddenException(decision.reason);
+    }
+
+    const wallet = await this.walletRepo.findOne({
+      where: { userId: user.id, currency },
     });
 
     if (!wallet) {
-      wallet = this.walletRepo.create({
-        userId: user.id,
-        balance: 0,
-        lockedBalance: 0,
-        frozen: false,
-      });
-      wallet = await this.walletRepo.save(wallet);
+      throw new NotFoundException('WALLET_NOT_FOUND');
     }
 
     return wallet;
   }
 
-  /**
-   * Fetch ledger entries for a user
-   */
-  async getLedgerByIdentifier(
-    identifier: string,
-  ): Promise<LedgerEntry[]> {
-    const user = await this.usersService.getByIdentifier(identifier);
+  /* ---------------------------------------------------------- */
+  /* BALANCE DERIVATION (LEDGER ONLY)                            */
+  /* ---------------------------------------------------------- */
 
-    return this.ledgerRepo.find({
-      where: { userId: user.id },
-      order: { createdAt: 'DESC' },
+  async deriveBalance(walletId: string): Promise<number> {
+    const entries = await this.ledgerRepo.find({
+      where: { walletId },
+      order: { createdAt: 'ASC' },
     });
+
+    let balance = 0;
+
+    for (const e of entries) {
+      switch (e.type) {
+        case 'CREDIT':
+        case 'UNLOCK':
+          balance += Number(e.amount);
+          break;
+        case 'DEBIT':
+        case 'LOCK':
+        case 'FEE':
+          balance -= Number(e.amount);
+          break;
+      }
+    }
+
+    return balance;
   }
 
-  /**
-   * Lock coins (staking / time-lock)
-   */
+  /* ---------------------------------------------------------- */
+  /* LOCK COINS (STAKING / TIME-LOCK)                            */
+  /* ---------------------------------------------------------- */
+
   async lockCoins(
-    identifier: string,
-    amount: number,
-  ): Promise<Wallet> {
-    if (amount <= 0) {
-      throw new BadRequestException('INVALID_AMOUNT');
-    }
-
-    const user = await this.usersService.getByIdentifier(identifier);
-    const wallet = await this.getWalletByIdentifier(identifier);
-
-    this.assertWalletUsable(user, wallet);
-
-    if (wallet.balance < amount) {
-      throw new BadRequestException('INSUFFICIENT_BALANCE');
-    }
-
-    wallet.balance -= amount;
-    wallet.lockedBalance += amount;
-
-    await this.walletRepo.save(wallet);
-
-    await this.appendLedger(
-      user.id,
-      'LOCK',
-      amount,
-      'Coins locked',
-    );
-
-    return wallet;
-  }
-
-  /**
-   * Withdraw coins
-   */
-  async withdraw(
-    identifier: string,
-    amount: number,
-  ): Promise<Wallet> {
-    if (amount <= 0) {
-      throw new BadRequestException('INVALID_AMOUNT');
-    }
-
-    const user = await this.usersService.getByIdentifier(identifier);
-    const wallet = await this.getWalletByIdentifier(identifier);
-
-    this.assertWalletUsable(user, wallet);
-
-    if (wallet.balance < amount) {
-      throw new BadRequestException('INSUFFICIENT_BALANCE');
-    }
-
-    wallet.balance -= amount;
-
-    await this.walletRepo.save(wallet);
-
-    await this.appendLedger(
-      user.id,
-      'WITHDRAW',
-      amount,
-      'Coins withdrawn',
-    );
-
-    return wallet;
-  }
-
-  /* ----------------------- */
-  /* Internal helpers        */
-  /* ----------------------- */
-
-  /**
-   * Wallet usability gate
-   * Applies country rules, KYC, and risk matrix
-   */
-  private async assertWalletUsable(
-    user: { id: string; frozen?: boolean; countryCode?: string },
-    wallet: Wallet,
-  ): Promise<void> {
-    if (user.frozen || wallet.frozen) {
-      throw new ForbiddenException('WALLET_FROZEN');
-    }
-
-    // Country rule
-    const countryRule = getCountryRule(user.countryCode || '');
-
-    // KYC signal
-    let kycVerified = true;
-    try {
-      const kyc = await this.kycService.getByIdentifier(
-        user.id,
-      );
-      kycVerified = kyc.status === 'APPROVED';
-    } catch {
-      kycVerified = false;
-    }
-
-    const risk = evaluateRisk({
-      countryRule,
-      featureSnapshot: {
-        [FeatureFlag.AUTH]: true,
-        [FeatureFlag.WALLET]: true,
-        [FeatureFlag.MINING]: true,
-        [FeatureFlag.ADS]: true,
-        [FeatureFlag.TRADE]: true,
-        [FeatureFlag.IMPORT_EXPORT]: true,
-        [FeatureFlag.MERCHANT]: true,
-        [FeatureFlag.KYC]: true,
-        [FeatureFlag.SUPPORT]: true,
-        [FeatureFlag.ADMIN]: true,
-      },
-      signals: {
-        kycVerified,
-      },
-    });
-
-    if (risk.action === RiskAction.FREEZE) {
-      throw new ForbiddenException('RISK_FREEZE');
-    }
-  }
-
-  /**
-   * Append immutable ledger entry
-   */
-  private async appendLedger(
     userId: string,
-    type: 'LOCK' | 'WITHDRAW',
+    walletId: string,
     amount: number,
-    note: string,
   ): Promise<void> {
-    const entry = this.ledgerRepo.create({
-      userId,
-      type,
-      amount,
-      note,
+    if (amount <= 0) {
+      throw new BadRequestException('INVALID_AMOUNT');
+    }
+
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new NotFoundException('USER_NOT_FOUND');
+
+    const wallet = await this.walletRepo.findOne({
+      where: { id: walletId, userId: user.id },
+    });
+    if (!wallet) throw new NotFoundException('WALLET_NOT_FOUND');
+
+    // 🔒 ZERO TRUST — FINANCIAL ACTION
+    const zt = new ZeroTrustGate(this.killSwitch);
+    const decision = zt.verify({
+      userId: user.id,
+      role: user.role,
+      userFrozen: user.isFrozen,
+      walletFrozen: wallet.isFrozen,
+      action: 'WALLET',
     });
 
-    await this.ledgerRepo.save(entry);
-  }
+    if (!decision.allowed) {
+      throw new ForbiddenException(decision.reason);
     }
+
+    const balance = await this.deriveBalance(wallet.id);
+    if (balance < amount) {
+      throw new ForbiddenException('INSUFFICIENT_BALANCE');
+    }
+
+    await LedgerEntry.append({
+      walletId: wallet.id,
+      type: 'LOCK',
+      amount,
+      referenceType: 'STAKING',
+      referenceId: user.id,
+    });
+  }
+
+  /* ---------------------------------------------------------- */
+  /* WITHDRAW                                                   */
+  /* ---------------------------------------------------------- */
+
+  async withdraw(
+    userId: string,
+    walletId: string,
+    amount: number,
+  ): Promise<void> {
+    if (amount <= 0) {
+      throw new BadRequestException('INVALID_AMOUNT');
+    }
+
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new NotFoundException('USER_NOT_FOUND');
+
+    const wallet = await this.walletRepo.findOne({
+      where: { id: walletId, userId: user.id },
+    });
+    if (!wallet) throw new NotFoundException('WALLET_NOT_FOUND');
+
+    // 🔒 ZERO TRUST — WITHDRAW
+    const zt = new ZeroTrustGate(this.killSwitch);
+    const decision = zt.verify({
+      userId: user.id,
+      role: user.role,
+      userFrozen: user.isFrozen,
+      walletFrozen: wallet.isFrozen,
+      action: 'WITHDRAW',
+    });
+
+    if (!decision.allowed) {
+      throw new ForbiddenException(decision.reason);
+    }
+
+    const balance = await this.deriveBalance(wallet.id);
+    if (balance < amount) {
+      throw new ForbiddenException('INSUFFICIENT_BALANCE');
+    }
+
+    await LedgerEntry.append({
+      walletId: wallet.id,
+      type: 'DEBIT',
+      amount,
+      referenceType: 'WITHDRAW',
+      referenceId: user.id,
+    });
+  }
+}
