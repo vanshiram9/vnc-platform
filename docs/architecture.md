@@ -1,114 +1,206 @@
----
-
-## 3. Module Segmentation
-
-### 3.1 Core Domains
-- **Auth**: Authentication, OTP, JWT strategy
-- **Users**: Identity, role state, freeze state
-- **Wallet**: Ledger-based balance derivation
-- **Trade**: Buy/Sell + escrow logic
-- **Mining**: Reward logic under rules
-- **Ads**: Anti-fraud guarded payouts
-- **Import-Export**: Escrow & LC logic
-- **Merchant**: Settlement & merchant KYC
-- **FAQ / Support**: Read/write support flows
-
-Each domain:
-- Has its own module
-- Has explicit controller → service boundary
-- Cannot bypass security gates
+# VNC PLATFORM — SYSTEM ARCHITECTURE
+Final Master Hard-Lock Version: v6.7.0.4
 
 ---
 
-## 4. Security Architecture
+## 1. Architecture Objective
 
-### 4.1 Zero-Trust Gate
-All critical actions pass through a **ZeroTrustGate** which validates:
+VNC Platform is designed as a **security-first, zero-trust, hard-locked system**
+where financial safety, governance control, and auditability are prioritized
+over feature velocity.
+
+The architecture guarantees that:
+- No single component can compromise the system
+- No implicit trust exists between layers
+- All critical actions are verifiable and reversible only via governance
+
+---
+
+## 2. Core Architectural Principles
+
+### 2.1 Zero-Trust by Default
+Every action is treated as hostile until verified.  
+Trust is **never assumed**, only derived through checks.
+
+### 2.2 Hard-Lock Architecture
+Once sealed:
+- No new modules can be added
+- No existing logic can be modified
+- No security rules can be bypassed
+
+Reference: `architecture.lock.json`
+
+### 2.3 Fail-Closed Design
+If any uncertainty occurs:
+→ the system denies execution  
+→ freezes relevant entities  
+→ records forensic evidence
+
+---
+
+## 3. High-Level System Layout
+
+Client Applications (Mobile / Web) │ ▼ HTTP API Layer (Controllers) │ ▼ Application Services (Business Logic) │ ├── Zero-Trust Gate ├── Incident Freeze ├── Governance Rules │ ▼ Persistence Layer (PostgreSQL) │ ▼ Audit & Forensic Artifacts
+
+---
+
+## 4. Backend Module Architecture
+
+Each domain module is isolated and structured as:
+
+module/ ├── module.ts ├── controller.ts ├── service.ts └── entity / logic files
+
+
+### Core Modules
+- Auth
+- Users
+- KYC
+- Wallet
+- Mining
+- Ads
+- Trade
+- Import–Export
+- Merchant
+- FAQ
+- Support
+- Admin
+- Owner
+- AI
+- Compliance
+- Security
+
+Each module:
+- Owns its own logic
+- Cannot directly access another module’s internal state
+- Communicates only through defined services
+
+---
+
+## 5. Security Architecture
+
+### 5.1 Zero-Trust Gate
+All critical actions pass through a centralized verification layer that checks:
 - Kill-switch state
-- User freeze state
-- Wallet freeze state
-- Action category (financial vs non-financial)
+- User freeze status
+- Wallet freeze status
+- Action risk category
 
-### 4.2 Incident Freeze
-On high risk or anomaly:
-- User + wallet are frozen
-- System-wide kill-switch may activate
-- No partial execution is allowed
-
-### 4.3 Forensic Snapshot
-At incident time:
-- Immutable snapshot is generated
-- Contains user, wallet, trades, risk signals
-- Designed for court / regulator review
+No controller or service can bypass this gate.
 
 ---
 
-## 5. Ledger & Funds Safety
+### 5.2 Incident Freeze System
+On detection of:
+- Fraud
+- Anomaly
+- High-risk behavior
+- Manual admin escalation
 
-- Balances are **never stored**
-- Only **ledger entries** are persisted
-- Balance is always **derived**
-- Ledger is **append-only**
-- Hash-chained entries prevent tampering
+The system immediately:
+- Freezes the user
+- Freezes the wallet
+- Optionally activates a system-wide kill-switch
 
-Result:
-> Funds cannot be silently altered or drained.
+Execution never continues in parallel.
 
 ---
 
-## 6. Governance Model
+### 5.3 Forensic Snapshot
+At the time of any incident:
+- A point-in-time snapshot is generated
+- Includes user, wallet, trade, and risk context
+- Snapshot is immutable and read-only
 
-| Role  | Authority |
-|------|-----------|
-| User | Limited to own scope |
-| Admin | Moderation & review only |
-| Owner | Emergency controls (kill-switch) |
+Designed for:
+- Internal investigation
+- Regulatory review
+- Judicial proceedings
 
+---
+
+## 6. Ledger & Funds Safety Model
+
+- Wallet balances are **never stored**
+- Only ledger entries are persisted
+- Ledger is append-only
+- Balance is always derived from history
+- Ledger entries are hash-chained
+
+This ensures:
+- No silent balance modification
+- No double-spend
+- No historical tampering
+
+---
+
+## 7. Governance & Authority Model
+
+| Role   | Capabilities |
+|------|--------------|
+| User | Limited to personal scope |
+| Admin | Review, moderation, escalation |
+| Owner | Emergency controls only |
+
+Rules:
 - Admin cannot override security
-- Owner actions are auditable
-- No role escalation via request payloads
+- Owner actions are logged and auditable
+- No role escalation via API input
 
 ---
 
-## 7. Compliance & Audit
+## 8. Compliance Architecture
 
-Architecture explicitly supports:
+The system natively supports:
 - AML reporting
-- RBI-aligned summaries
-- Judicial response payloads
+- RBI-aligned compliance summaries
+- Judicial response artifacts
 
-All reports are:
-- Deterministic
-- Read-only
-- Generated from system state
-
----
-
-## 8. Deployment Boundaries
-
-- **Backend**: Hard-locked, immutable
-- **Docs / Infra / Final**: Required for production seal
-- **Frontend**: Isolated, handled separately
+Compliance outputs:
+- Do not mutate system state
+- Are generated from verified data
+- Are deterministic and reproducible
 
 ---
 
-## 9. What This Architecture Guarantees
+## 9. Deployment & Isolation
 
-✔ No unauthorized fund movement  
-✔ No privilege escalation  
-✔ No silent logic changes  
-✔ No audit ambiguity  
-
----
-
-## 10. What It Does NOT Claim
-
-❌ Absolute security  
-❌ Immunity to all network attacks  
-
-Instead, it guarantees:
-> **Maximum damage = freeze + evidence, not loss.**
+- Backend is fully hard-locked
+- Infra and docs are sealed before production
+- Frontend is isolated and cannot alter backend rules
 
 ---
 
-**VNC PLATFORM — ARCHITECTURE SEALED**
+## 10. Threat Model Summary
+
+The architecture assumes:
+- Compromised clients
+- Stolen tokens
+- Malicious insiders
+- High-volume automated attacks
+
+Response strategy:
+> Contain damage, freeze execution, preserve evidence.
+
+---
+
+## 11. Guarantees
+
+✔ Funds cannot be drained silently  
+✔ Privilege escalation is blocked  
+✔ Security bypass paths do not exist  
+✔ Audit trails are complete  
+
+---
+
+## 12. Explicit Non-Claims
+
+The system does NOT claim:
+- Absolute security
+- Immunity from all attacks
+
+It guarantees:
+> **Worst case outcome is freeze + evidence, not loss.**
+
+---
+
+**VNC PLATFORM — ARCHITECTURE HARD-LOCKED**
