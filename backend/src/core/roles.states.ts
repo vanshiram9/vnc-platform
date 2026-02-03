@@ -1,13 +1,22 @@
 // backend/src/core/roles.states.ts
 
 /**
- * System Roles
- * Ordered by authority level (low → high)
+ * VNC PLATFORM — SYSTEM ROLES
+ * FINAL & HARD-LOCKED
+ *
+ * Roles are derived ONLY from existing backend modules:
+ * users, merchant, support, admin, owner
+ *
+ * No external / generic / future roles are allowed here.
+ */
+
+/**
+ * Identity Roles
+ * (Who the actor is in the system)
  */
 export enum SystemRole {
   USER = 'USER',
   MERCHANT = 'MERCHANT',
-  CREATOR = 'CREATOR',
   SUPPORT = 'SUPPORT',
   ADMIN = 'ADMIN',
   OWNER = 'OWNER',
@@ -15,67 +24,78 @@ export enum SystemRole {
 
 /**
  * Role Hierarchy
- * Higher role inherits permissions of lower roles.
+ * Higher roles inherit authority of lower roles.
  */
-export const ROLE_HIERARCHY: Record<SystemRole, SystemRole[]> =
-  {
-    [SystemRole.USER]: [],
-    [SystemRole.MERCHANT]: [SystemRole.USER],
-    [SystemRole.CREATOR]: [SystemRole.USER],
-    [SystemRole.SUPPORT]: [SystemRole.USER],
-    [SystemRole.ADMIN]: [
-      SystemRole.USER,
-      SystemRole.MERCHANT,
-      SystemRole.CREATOR,
-      SystemRole.SUPPORT,
-    ],
-    [SystemRole.OWNER]: [
-      SystemRole.USER,
-      SystemRole.MERCHANT,
-      SystemRole.CREATOR,
-      SystemRole.SUPPORT,
-      SystemRole.ADMIN,
-    ],
-  };
+export const ROLE_HIERARCHY: Record<SystemRole, SystemRole[]> = {
+  [SystemRole.USER]: [],
 
-/**
- * Role Escalation Rules
- * Explicitly defines allowed promotions.
- */
-export const ROLE_ESCALATION: Record<
-  SystemRole,
-  SystemRole[]
-> = {
-  [SystemRole.USER]: [
+  [SystemRole.MERCHANT]: [
+    SystemRole.USER,
+  ],
+
+  [SystemRole.SUPPORT]: [
+    SystemRole.USER,
+  ],
+
+  [SystemRole.ADMIN]: [
+    SystemRole.USER,
     SystemRole.MERCHANT,
-    SystemRole.CREATOR,
     SystemRole.SUPPORT,
   ],
+
+  [SystemRole.OWNER]: [
+    SystemRole.USER,
+    SystemRole.MERCHANT,
+    SystemRole.SUPPORT,
+    SystemRole.ADMIN,
+  ],
+};
+
+/**
+ * Allowed Role Escalation
+ * Explicit promotions allowed by system policy.
+ */
+export const ROLE_ESCALATION: Record<SystemRole, SystemRole[]> = {
+  [SystemRole.USER]: [
+    SystemRole.MERCHANT,
+    SystemRole.SUPPORT,
+  ],
+
   [SystemRole.MERCHANT]: [],
-  [SystemRole.CREATOR]: [],
   [SystemRole.SUPPORT]: [],
   [SystemRole.ADMIN]: [],
   [SystemRole.OWNER]: [],
 };
 
 /**
- * Role Downgrade Rules
- * Used in moderation / risk response.
+ * Allowed Role Downgrade
+ * Used during moderation, risk response, compliance actions.
  */
-export const ROLE_DOWNGRADE: Record<
-  SystemRole,
-  SystemRole[]
-> = {
-  [SystemRole.OWNER]: [SystemRole.ADMIN],
-  [SystemRole.ADMIN]: [SystemRole.SUPPORT, SystemRole.USER],
-  [SystemRole.SUPPORT]: [SystemRole.USER],
-  [SystemRole.MERCHANT]: [SystemRole.USER],
-  [SystemRole.CREATOR]: [SystemRole.USER],
+export const ROLE_DOWNGRADE: Record<SystemRole, SystemRole[]> = {
+  [SystemRole.OWNER]: [
+    SystemRole.ADMIN,
+  ],
+
+  [SystemRole.ADMIN]: [
+    SystemRole.SUPPORT,
+    SystemRole.MERCHANT,
+    SystemRole.USER,
+  ],
+
+  [SystemRole.SUPPORT]: [
+    SystemRole.USER,
+  ],
+
+  [SystemRole.MERCHANT]: [
+    SystemRole.USER,
+  ],
+
   [SystemRole.USER]: [],
 };
 
 /**
- * Helper: Check if roleA has authority over roleB
+ * Authority Check Helper
+ * Determines whether roleA has authority over roleB.
  */
 export function hasRoleAuthority(
   roleA: SystemRole,
