@@ -1,0 +1,69 @@
+{
+  "project": "VNC PLATFORM",
+  "final_master_version": "v6.7.0.4",
+  "lock_status": "HARD_LOCKED",
+  "lock_timestamp": "2026-02-03T00:00:00Z",
+
+  "rules": {
+    "no_new_features": true,
+    "no_deletions": true,
+    "no_rewrites": true,
+    "tree_is_source_of_truth": true,
+    "backend_logic_frozen": true,
+    "frontend_logic_frozen": false,
+    "infra_changes_restricted": true
+  },
+
+  "allowed_root_files": [
+    "README.md",
+    "LICENSE",
+    "package.json",
+    "tsconfig.json",
+    "nest-cli.json",
+    ".env.example",
+    "architecture.lock.json",
+    "audit.hashes.json"
+  ],
+
+  "allowed_folders": {
+    "backend": {
+      "status": "COMPLETE",
+      "mutable": false
+    },
+    "frontend": {
+      "status": "PENDING",
+      "mutable": true
+    },
+    "docs": {
+      "status": "REQUIRED",
+      "mutable": false
+    },
+    "infra": {
+      "status": "REQUIRED",
+      "mutable": false
+    },
+    "final": {
+      "status": "REQUIRED",
+      "mutable": false
+    }
+  },
+
+  "forbidden_actions": [
+    "adding_new_modules",
+    "removing_existing_files",
+    "changing_business_logic",
+    "bypassing_zero_trust",
+    "altering_ledger_rules"
+  ],
+
+  "audit": {
+    "required": true,
+    "hash_validation": true,
+    "manual_review_required": true
+  },
+
+  "authority": {
+    "owner_only_override": true,
+    "admin_override_allowed": false
+  }
+}
