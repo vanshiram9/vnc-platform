@@ -1,0 +1,71 @@
+{
+  "project": "VNC PLATFORM",
+  "final_master_version": "v6.7.0.4",
+  "audit_standard": "sha256",
+  "generated_at": "2026-02-03T00:10:00Z",
+
+  "scope": {
+    "root": true,
+    "docs": true,
+    "infra": true,
+    "final": true,
+    "backend": false,
+    "frontend": false
+  },
+
+  "files": {
+    "README.md": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "LICENSE": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "package.json": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "tsconfig.json": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "nest-cli.json": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    ".env.example": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "architecture.lock.json": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "SEALED"
+    },
+
+    "docs/*": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "infra/*": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    },
+    "final/*": {
+      "hash": "PENDING_AFTER_FINAL_CONTENT",
+      "status": "TO_BE_SEALED"
+    }
+  },
+
+  "rules": {
+    "hash_update_allowed_only_before_final_seal": true,
+    "post_seal_modification_allowed": false,
+    "owner_override_required": true
+  },
+
+  "final_seal": {
+    "sealed": false,
+    "sealed_at": null,
+    "sealed_by": null
+  }
+}
