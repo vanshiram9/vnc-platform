@@ -1,0 +1,94 @@
+services:
+  - type: web
+    name: vnc-backend
+    runtime: node
+    plan: standard
+    region: singapore
+    branch: main
+
+    buildCommand: |
+      npm install
+      npm run build:backend
+
+    startCommand: |
+      npm run start:backend
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: APP_NAME
+        value: VNC_PLATFORM
+
+      - key: APP_PORT
+        value: 3000
+
+      # ---- SECURITY ----
+      - key: JWT_SECRET
+        sync: false
+
+      - key: JWT_EXPIRES_IN
+        value: 15m
+
+      - key: OTP_TTL_SECONDS
+        value: "300"
+
+      - key: OTP_MAX_ATTEMPTS
+        value: "5"
+
+      # ---- DATABASE ----
+      - key: DB_HOST
+        sync: false
+
+      - key: DB_PORT
+        value: "5432"
+
+      - key: DB_NAME
+        sync: false
+
+      - key: DB_USER
+        sync: false
+
+      - key: DB_PASSWORD
+        sync: false
+
+      - key: DB_SSL
+        value: "true"
+
+      # ---- LEDGER ----
+      - key: LEDGER_HASH_ALGO
+        value: sha256
+
+      - key: LEDGER_STRICT_MODE
+        value: "true"
+
+      # ---- COMPLIANCE ----
+      - key: DEFAULT_COUNTRY
+        value: IN
+
+      - key: COMPLIANCE_STRICT
+        value: "true"
+
+      # ---- FEATURE FLAGS ----
+      - key: FEATURE_MINING_ENABLED
+        value: "true"
+
+      - key: FEATURE_ADS_ENABLED
+        value: "true"
+
+      - key: FEATURE_TRADE_ENABLED
+        value: "true"
+
+      - key: FEATURE_IMPORT_EXPORT_ENABLED
+        value: "true"
+
+      # ---- AUDIT ----
+      - key: AUDIT_MODE
+        value: "true"
+
+      - key: LOG_LEVEL
+        value: info
+
+    autoDeploy: true
+
+    healthCheckPath: /
