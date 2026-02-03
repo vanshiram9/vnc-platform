@@ -1,20 +1,31 @@
-// backend/src/security/zero.trust.ts
+// ============================================================
+// VNC PLATFORM — ZERO TRUST GATE
+// File: backend/src/security/zero.trust.ts
+// Grade: BANK + MILITARY + RBI
+// FINAL MASTER HARD-LOCK v6.7.0.4
+// ============================================================
 
 /**
- * VNC PLATFORM — ZERO TRUST GATE
- * FINAL & HARD-LOCKED
+ * ZERO TRUST PRINCIPLE
+ * --------------------
+ * - No action is trusted by default
+ * - No role is trusted by default
+ * - No state is assumed safe
+ * - Every critical action must pass this gate
  *
- * Purpose:
- * - Enforce zero-trust checks before critical actions
- * - Centralized, reusable decision logic
- *
- * IMPORTANT:
- * - No HTTP
+ * IMPORTANT DESIGN RULES
+ * ----------------------
+ * - No HTTP / Express dependency
  * - No persistence
- * - Deterministic & auditable
+ * - Deterministic decisions only
+ * - Explicit invocation by services
  */
 
 import { KillSwitch } from '../owner/kill.switch';
+
+/* ----------------------------- */
+/* CRITICAL ACTIONS (LOCKED)     */
+/* ----------------------------- */
 
 export type CriticalAction =
   | 'AUTH'
@@ -27,62 +38,85 @@ export type CriticalAction =
   | 'ADMIN'
   | 'OWNER';
 
+/* ----------------------------- */
+/* CONTEXT REQUIRED FOR DECISION */
+/* ----------------------------- */
+
 export interface ZeroTrustContext {
   userId: string;
+
+  /** Hard states */
   userFrozen?: boolean;
   walletFrozen?: boolean;
+  systemFrozen?: boolean;
+
+  /** Identity & authority */
+  role?: 'USER' | 'MERCHANT' | 'ADMIN' | 'OWNER';
+
+  /** Action intent */
   action: CriticalAction;
+
+  /** Optional risk score (0–100) */
+  riskScore?: number;
 }
 
-/**
- * ZeroTrustGate
- * Stateless verifier (except kill-switch read)
- */
+/* ----------------------------- */
+/* ZERO TRUST GATE               */
+/* ----------------------------- */
+
 export class ZeroTrustGate {
   constructor(
     private readonly killSwitch: KillSwitch,
   ) {}
 
   /**
-   * Verify whether an action is allowed
+   * Verify whether a critical action is allowed
    */
-  verify(ctx: ZeroTrustContext): {
-    allowed: boolean;
-    reason?: string;
-  } {
-    // Global emergency stop
-    if (this.killSwitch.isActive()) {
-      return {
-        allowed: false,
-        reason: 'KILL_SWITCH_ACTIVE',
-      };
+  verify(
+    ctx: ZeroTrustContext,
+  ): { allowed: boolean; reason?: string } {
+    /* 1️⃣ GLOBAL EMERGENCY STOP */
+    if (this.killSwitch.isActive() || ctx.systemFrozen === true) {
+      return this.deny('SYSTEM_FROZEN');
     }
 
-    // User-level freeze
+    /* 2️⃣ USER FREEZE (ABSOLUTE) */
     if (ctx.userFrozen === true) {
-      return {
-        allowed: false,
-        reason: 'USER_FROZEN',
-      };
+      return this.deny('USER_FROZEN');
     }
 
-    // Wallet-level freeze (for financial actions)
+    /* 3️⃣ WALLET FREEZE (FINANCIAL ACTIONS) */
     if (
       ctx.walletFrozen === true &&
       this.isFinancialAction(ctx.action)
     ) {
-      return {
-        allowed: false,
-        reason: 'WALLET_FROZEN',
-      };
+      return this.deny('WALLET_FROZEN');
     }
 
+    /* 4️⃣ ROLE BOUNDARY (NO IMPLICIT TRUST) */
+    if (!this.isRoleAllowed(ctx.role, ctx.action)) {
+      return this.deny('ROLE_NOT_ALLOWED');
+    }
+
+    /* 5️⃣ RISK SCORE GATE (DEFENSIVE) */
+    if (
+      typeof ctx.riskScore === 'number' &&
+      ctx.riskScore >= 80
+    ) {
+      return this.deny('RISK_TOO_HIGH');
+    }
+
+    /* 6️⃣ PASSED ZERO TRUST */
     return { allowed: true };
   }
 
-  /* ----------------------- */
-  /* Internal helpers        */
-  /* ----------------------- */
+  /* ----------------------------- */
+  /* INTERNAL HELPERS              */
+  /* ----------------------------- */
+
+  private deny(reason: string) {
+    return { allowed: false, reason };
+  }
 
   private isFinancialAction(
     action: CriticalAction,
@@ -95,5 +129,22 @@ export class ZeroTrustGate {
       'ADS',
       'MINING',
     ].includes(action);
+  }
+
+  private isRoleAllowed(
+    role: ZeroTrustContext['role'],
+    action: CriticalAction,
+  ): boolean {
+    if (!role) return false;
+
+    if (action === 'OWNER') {
+      return role === 'OWNER';
+    }
+
+    if (action === 'ADMIN') {
+      return role === 'ADMIN' || role === 'OWNER';
+    }
+
+    return true;
   }
 }
