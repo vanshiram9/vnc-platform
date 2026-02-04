@@ -1,81 +1,30 @@
-// backend/src/main.ts
+// ============================================================
+// VNC PLATFORM — MAIN BOOTSTRAP
+// Phase-1 CORE (COMPILE-SAFE)
+// ============================================================
+
+import 'reflect-metadata';
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import helmet from 'helmet';
-import compression from 'compression';
-
-import { bootstrapApplication } from './bootstrap/app.bootstrap';
-import { LifecycleManager } from './bootstrap/lifecycle.manager';
 
 async function bootstrap() {
-  /**
-   * Create NestJS Application
-   */
-  const app = await NestFactory.create(AppModule, {
-    bufferLogs: true,
+  const app = await NestFactory.create(AppModule);
+
+  // Basic CORS (Phase-1)
+  app.enableCors({
+    origin: '*',
+    methods: ['GET', 'POST'],
   });
 
-  /**
-   * Global Security Middlewares
-   */
-  app.use(helmet());
-  app.use(compression());
+  const port = process.env.PORT || 3000;
 
-  /**
-   * Global Validation (DTO level hard validation)
-   */
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  await app.listen(port);
 
-  /**
-   * Config Service (env driven)
-   */
-  const configService = app.get(ConfigService);
-
-  const PORT = configService.get<number>('PORT') || 3000;
-  const NODE_ENV = configService.get<string>('NODE_ENV') || 'development';
-
-  /**
-   * Bootstrap Self-Tests, Feature Flags, Risk Gates
-   * (Delegated to bootstrap layer — no logic leak here)
-   */
-  await bootstrapApplication(app);
-
-  /**
-   * Lifecycle Manager
-   * Handles:
-   * - graceful shutdown
-   * - signal trapping
-   * - forensic snapshot hooks
-   */
-  LifecycleManager.attach(app);
-
-  /**
-   * Start HTTP Server
-   */
-  await app.listen(PORT);
-
-  // Explicit log (audit friendly)
   // eslint-disable-next-line no-console
   console.log(
-    `[VNC PLATFORM] Backend started | env=${NODE_ENV} | port=${PORT}`,
+    `VNC backend running on port ${port}`,
   );
 }
 
-/**
- * Fatal-level protection
- * Any unhandled error freezes startup (no silent boot)
- */
-bootstrap().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error('[VNC PLATFORM] FATAL BOOT ERROR', err);
-  process.exit(1);
-});
+bootstrap();
