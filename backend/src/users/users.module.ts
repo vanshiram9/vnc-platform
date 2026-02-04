@@ -1,26 +1,22 @@
-// backend/src/users/users.module.ts
+// ============================================================
+// VNC PLATFORM — USERS MODULE
+// Phase-1 CORE WIRING
+// ============================================================
 
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { UsersController } from './users.controller';
-import { UsersService } from './users.service';
 import { User } from './user.entity';
+import { UsersService } from './users.service';
 
 @Module({
   imports: [
-    /**
-     * Entity registration
-     */
     TypeOrmModule.forFeature([User]),
   ],
-  controllers: [UsersController],
-  providers: [UsersService],
+  providers: [
+    UsersService,
+  ],
   exports: [
-    /**
-     * Export service for cross-module usage
-     * (auth, wallet, kyc, admin)
-     */
     UsersService,
   ],
 })
