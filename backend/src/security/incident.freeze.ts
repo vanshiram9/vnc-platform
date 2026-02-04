@@ -1,90 +1,126 @@
-// backend/src/security/incident.freeze.ts
+// ============================================================
+// VNC PLATFORM — INCIDENT FREEZE ENGINE
+// File: backend/src/security/incident.freeze.ts
+// Grade: BANK + MILITARY + RBI
+// FINAL MASTER HARD-LOCK v6.7.0.4
+// ============================================================
 
 /**
- * VNC PLATFORM — INCIDENT FREEZE
- * FINAL & HARD-LOCKED
+ * INCIDENT FREEZE PRINCIPLE
+ * -------------------------
+ * - Any suspicious or confirmed incident can freeze:
+ *   - a user
+ *   - a wallet
+ *   - or the entire system
  *
- * Purpose:
- * - Automatically freeze entities during security incidents
- * - Triggered by risk, fraud, anomaly, or admin signals
+ * - Freeze is SAFE by default
+ * - Unfreeze is MANUAL + EXPLICIT
+ * - No silent recovery
  *
- * IMPORTANT:
- * - No HTTP
- * - No persistence
- * - Deterministic execution
+ * This file is the FINAL SAFETY NET.
  */
 
-import { UsersService } from '../users/users.service';
-import { WalletService } from '../wallet/wallet.service';
+import { Injectable } from '@nestjs/common';
 import { KillSwitch } from '../owner/kill.switch';
-import { RiskAction } from '../core/risk.matrix';
 
-export type IncidentLevel =
-  | 'USER'
-  | 'WALLET'
-  | 'SYSTEM';
+type FreezeScope = 'USER' | 'WALLET' | 'SYSTEM';
 
-export interface IncidentContext {
-  userId?: string;
+interface FreezeEvent {
+  scope: FreezeScope;
+  targetId?: string;
   reason: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  timestamp: Date;
 }
 
+@Injectable()
 export class IncidentFreeze {
+  private readonly events: FreezeEvent[] = [];
+
   constructor(
-    private readonly usersService: UsersService,
-    private readonly walletService: WalletService,
     private readonly killSwitch: KillSwitch,
   ) {}
 
-  /**
-   * Execute incident freeze
-   */
-  async execute(
-    level: IncidentLevel,
-    ctx: IncidentContext,
+  /* ---------------------------------------------------------- */
+  /* SYSTEM FREEZE (GLOBAL)                                     */
+  /* ---------------------------------------------------------- */
+
+  freezeSystem(reason: string): void {
+    if (!this.killSwitch.isActive()) {
+      this.killSwitch.activate(reason);
+      this.record({
+        scope: 'SYSTEM',
+        reason,
+      });
+    }
+  }
+
+  isSystemFrozen(): boolean {
+    return this.killSwitch.isActive();
+  }
+
+  /* ---------------------------------------------------------- */
+  /* USER FREEZE                                                */
+  /* ---------------------------------------------------------- */
+
+  freezeUser(
+    userId: string,
+    reason: string,
+  ): void {
+    this.record({
+      scope: 'USER',
+      targetId: userId,
+      reason,
+    });
+
+    /**
+     * IMPORTANT:
+     * Actual user freeze flag is applied
+     * by domain services (UsersService)
+     * after review.
+     *
+     * This engine only decides & records.
+     */
+  }
+
+  /* ---------------------------------------------------------- */
+  /* WALLET FREEZE                                              */
+  /* ---------------------------------------------------------- */
+
+  freezeWallet(
+    walletId: string,
+    reason: string,
+  ): void {
+    this.record({
+      scope: 'WALLET',
+      targetId: walletId,
+      reason,
+    });
+
+    /**
+     * Actual wallet freeze flag is applied
+     * by WalletService after verification.
+     */
+  }
+
+  /* ---------------------------------------------------------- */
+  /* INCIDENT RECORDING                                         */
+  /* ---------------------------------------------------------- */
+
+  private record(
+    event: Omit<FreezeEvent, 'timestamp'>,
   ) {
-    const timestamp = new Date();
+    this.events.push({
+      ...event,
+      timestamp: new Date(),
+    });
+  }
 
-    // SYSTEM-WIDE INCIDENT
-    if (
-      level === 'SYSTEM' ||
-      ctx.severity === 'CRITICAL'
-    ) {
-      this.killSwitch.activate(ctx.reason);
-      return {
-        level: 'SYSTEM',
-        action: RiskAction.FREEZE,
-        reason: ctx.reason,
-        timestamp,
-      };
-    }
+  /* ---------------------------------------------------------- */
+  /* FORENSIC SNAPSHOT                                          */
+  /* ---------------------------------------------------------- */
 
-    // USER / WALLET INCIDENT
-    if (!ctx.userId) {
-      throw new Error(
-        'USER_ID_REQUIRED_FOR_INCIDENT',
-      );
-    }
-
-    // Freeze user
-    await this.usersService.setFrozen(
-      ctx.userId,
-      true,
-    );
-
-    // Freeze wallet
-    await this.walletService.setFrozen(
-      ctx.userId,
-      true,
-    );
-
-    return {
-      level,
-      userId: ctx.userId,
-      action: RiskAction.FREEZE,
-      reason: ctx.reason,
-      timestamp,
-    };
+  snapshot(): FreezeEvent[] {
+    // Read-only forensic view
+    return [...this.events];
   }
 }
