@@ -1,153 +1,201 @@
-// backend/src/import_export/ie.service.ts
+// ============================================================
+// VNC PLATFORM — IMPORT / EXPORT SERVICE
+// File: backend/src/import_export/ie.service.ts
+// Grade: BANK + MILITARY + RBI
+// FINAL MASTER HARD-LOCK v6.7.0.4
+// ============================================================
 
 import {
   Injectable,
-  BadRequestException,
   ForbiddenException,
+  BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+import { IEContract } from './ie.entity';
+import { Wallet } from '../wallet/wallet.entity';
+import { LedgerEntry } from '../wallet/ledger.entry';
 
 import { UsersService } from '../users/users.service';
-import { TradeService } from '../trade/trade.service';
-import { KycService } from '../kyc/kyc.service';
-import { WalletService } from '../wallet/wallet.service';
-
-import { EscrowLcLogic } from './escrow.lc.logic';
-import { getCountryRule } from '../core/country.rules';
-import { RiskAction, evaluateRisk } from '../core/risk.matrix';
-import { FeatureFlag } from '../core/feature.flags';
-
-interface CreateIeContractPayload {
-  tradeId: string;
-  importerCountry: string;
-  exporterCountry: string;
-  goodsDescription: string;
-  value: number;
-}
+import { ZeroTrustGate } from '../security/zero.trust';
+import { KillSwitch } from '../owner/kill.switch';
 
 @Injectable()
-export class IeService {
+export class IEService {
   constructor(
+    @InjectRepository(IEContract)
+    private readonly ieRepo: Repository<IEContract>,
+    @InjectRepository(Wallet)
+    private readonly walletRepo: Repository<Wallet>,
     private readonly usersService: UsersService,
-    private readonly tradeService: TradeService,
-    private readonly kycService: KycService,
-    private readonly walletService: WalletService,
-    private readonly escrowLogic: EscrowLcLogic,
+    private readonly killSwitch: KillSwitch,
   ) {}
 
-  /**
-   * Create an import/export contract backed by LC escrow
-   */
+  /* ---------------------------------------------------------- */
+  /* CREATE IE CONTRACT                                         */
+  /* ---------------------------------------------------------- */
+
   async createContract(
-    identifier: string,
-    payload: CreateIeContractPayload,
-  ) {
-    if (!payload.tradeId || payload.value <= 0) {
-      throw new BadRequestException('INVALID_IE_PARAMS');
+    importerId: string,
+    importerWalletId: string,
+    exporterId: string,
+    exporterWalletId: string,
+    asset: string,
+    amount: number,
+    expiryAt: Date,
+  ): Promise<IEContract> {
+    if (amount <= 0) {
+      throw new BadRequestException('INVALID_AMOUNT');
     }
 
-    const user = await this.usersService.getByIdentifier(
-      identifier,
+    const importer = await this.usersService.findById(
+      importerId,
+    );
+    const exporter = await this.usersService.findById(
+      exporterId,
     );
 
-    // KYC gate
-    const kyc = await this.kycService.getByIdentifier(
-      identifier,
-    );
-    if (kyc.status !== 'APPROVED') {
-      throw new ForbiddenException('KYC_REQUIRED');
+    if (!importer || !exporter) {
+      throw new NotFoundException('USER_NOT_FOUND');
     }
 
-    // Country rules gate (importer & exporter)
-    const importerRule = getCountryRule(
-      payload.importerCountry,
-    );
-    const exporterRule = getCountryRule(
-      payload.exporterCountry,
-    );
+    const importerWallet =
+      await this.walletRepo.findOne({
+        where: { id: importerWalletId, userId: importer.id },
+      });
 
-    if (
-      importerRule.policy === 'BLOCK' ||
-      exporterRule.policy === 'BLOCK'
-    ) {
-      throw new ForbiddenException(
-        'COUNTRY_BLOCKED',
-      );
-    }
-
-    // Risk gate
-    const risk = evaluateRisk({
-      countryRule: importerRule,
-      featureSnapshot: {
-        [FeatureFlag.AUTH]: true,
-        [FeatureFlag.WALLET]: true,
-        [FeatureFlag.MINING]: true,
-        [FeatureFlag.ADS]: true,
-        [FeatureFlag.TRADE]: true,
-        [FeatureFlag.IMPORT_EXPORT]: true,
-        [FeatureFlag.MERCHANT]: true,
-        [FeatureFlag.KYC]: true,
-        [FeatureFlag.SUPPORT]: true,
-        [FeatureFlag.ADMIN]: true,
-      },
-      signals: {},
-    });
-
-    if (risk.action === RiskAction.FREEZE) {
-      throw new ForbiddenException('RISK_FREEZE');
-    }
-
-    // Fetch underlying trade (must exist)
-    const trade = await this.tradeService.getEscrowStatus(
-      payload.tradeId,
-    );
-
-    // Lock funds in wallet for IE value
-    await this.walletService.lockCoins(
-      identifier,
-      payload.value,
-    );
-
-    // Create LC-backed escrow contract
-    return this.escrowLogic.createLcContract({
-      userId: user.id,
-      tradeId: trade.id,
-      importerCountry: payload.importerCountry,
-      exporterCountry: payload.exporterCountry,
-      goodsDescription: payload.goodsDescription,
-      value: payload.value,
-    });
-  }
-
-  /**
-   * Get IE dashboard for user
-   * (derived from escrow logic)
-   */
-  async getDashboard(identifier: string) {
-    const user = await this.usersService.getByIdentifier(
-      identifier,
-    );
-
-    return this.escrowLogic.getContractsForUser(
-      user.id,
-    );
-  }
-
-  /**
-   * Get escrow / LC status
-   */
-  async getEscrowStatus(contractId: string) {
-    const contract =
-      await this.escrowLogic.getContract(
-        contractId,
-      );
-
-    if (!contract) {
+    if (!importerWallet) {
       throw new NotFoundException(
-        'IE_CONTRACT_NOT_FOUND',
+        'IMPORTER_WALLET_NOT_FOUND',
       );
     }
 
-    return contract;
+    // 🔒 ZERO TRUST — CONTRACT CREATION
+    const zt = new ZeroTrustGate(this.killSwitch);
+    const decision = zt.verify({
+      userId: importer.id,
+      role: importer.role,
+      userFrozen: importer.isFrozen,
+      walletFrozen: importerWallet.isFrozen,
+      action: 'IMPORT_EXPORT',
+    });
+
+    if (!decision.allowed) {
+      throw new ForbiddenException(decision.reason);
+    }
+
+    // 🔐 LOCK FUNDS (LC ESCROW)
+    const balance = await LedgerEntry.deriveBalance(
+      importerWallet.id,
+    );
+    if (balance < amount) {
+      throw new ForbiddenException(
+        'INSUFFICIENT_BALANCE',
+      );
+    }
+
+    await LedgerEntry.append({
+      walletId: importerWallet.id,
+      type: 'LOCK',
+      amount,
+      referenceType: 'IE_ESCROW',
+      referenceId: importer.id,
+    });
+
+    const contract = this.ieRepo.create({
+      importerId: importer.id,
+      exporterId: exporter.id,
+      importerWalletId,
+      exporterWalletId,
+      asset,
+      amount,
+      status: 'ESCROW_LOCKED',
+      expiryAt,
+    });
+
+    return this.ieRepo.save(contract);
   }
-}b
+
+  /* ---------------------------------------------------------- */
+  /* RELEASE IE ESCROW (CONDITIONS MET)                          */
+  /* ---------------------------------------------------------- */
+
+  async releaseEscrow(
+    contractId: string,
+    operatorId: string,
+  ): Promise<void> {
+    const contract = await this.ieRepo.findOne({
+      where: { id: contractId },
+    });
+    if (!contract) {
+      throw new NotFoundException('CONTRACT_NOT_FOUND');
+    }
+
+    if (contract.status !== 'ESCROW_LOCKED') {
+      throw new ForbiddenException(
+        'ESCROW_NOT_RELEASABLE',
+      );
+    }
+
+    const operator = await this.usersService.findById(
+      operatorId,
+    );
+    if (!operator) {
+      throw new NotFoundException('OPERATOR_NOT_FOUND');
+    }
+
+    // 🔒 ZERO TRUST — RELEASE
+    const zt = new ZeroTrustGate(this.killSwitch);
+    const decision = zt.verify({
+      userId: operator.id,
+      role: operator.role,
+      userFrozen: operator.isFrozen,
+      action: 'IMPORT_EXPORT',
+    });
+
+    if (!decision.allowed) {
+      throw new ForbiddenException(decision.reason);
+    }
+
+    // 🔓 RELEASE TO EXPORTER
+    await LedgerEntry.append({
+      walletId: contract.exporterWalletId,
+      type: 'CREDIT',
+      amount: contract.amount,
+      referenceType: 'IE_RELEASE',
+      referenceId: contract.id,
+    });
+
+    contract.status = 'RELEASED';
+    await this.ieRepo.save(contract);
+  }
+
+  /* ---------------------------------------------------------- */
+  /* EXPIRE CONTRACT                                            */
+  /* ---------------------------------------------------------- */
+
+  async expireContract(
+    contractId: string,
+  ): Promise<void> {
+    const contract = await this.ieRepo.findOne({
+      where: { id: contractId },
+    });
+    if (!contract) return;
+
+    if (contract.status !== 'ESCROW_LOCKED') return;
+
+    // 🔁 RETURN FUNDS TO IMPORTER
+    await LedgerEntry.append({
+      walletId: contract.importerWalletId,
+      type: 'UNLOCK',
+      amount: contract.amount,
+      referenceType: 'IE_EXPIRE',
+      referenceId: contract.id,
+    });
+
+    contract.status = 'EXPIRED';
+    await this.ieRepo.save(contract);
+  }
+}
