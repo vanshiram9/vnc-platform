@@ -1,15 +1,16 @@
 {
   "name": "vnc-platform-backend",
   "version": "6.7.0.4",
-  "description": "VNC Platform Backend – Final Master Hard-Lock",
   "private": true,
   "license": "UNLICENSED",
+  "description": "VNC Platform Backend – Final Master Hard-Lock",
 
   "scripts": {
-    "build": "nest build",
+    "prebuild": "node -e \"console.log('VNC Platform – Hard-Lock enforced')\"",
+    "build": "npx nest build",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
-    "dev": "nest start --watch"
+    "dev": "npx nest start --watch"
   },
 
   "dependencies": {
@@ -23,10 +24,8 @@
 
     "typeorm": "^0.3.20",
     "pg": "^8.11.5",
-
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
-
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1"
   },
@@ -35,7 +34,6 @@
     "@nestjs/cli": "^10.3.2",
     "@nestjs/schematics": "^10.1.1",
     "@nestjs/testing": "^10.3.0",
-
     "typescript": "^5.4.0",
     "ts-node": "^10.9.2",
     "@types/node": "^20.11.30"
