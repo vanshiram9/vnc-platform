@@ -7,10 +7,10 @@
 
   "scripts": {
     "prebuild": "node -e \"console.log('VNC Platform – Hard-Lock enforced')\"",
-    "build": "npx nest build",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
-    "dev": "npx nest start --watch"
+    "dev": "ts-node src/main.ts"
   },
 
   "dependencies": {
@@ -31,9 +31,6 @@
   },
 
   "devDependencies": {
-    "@nestjs/cli": "^10.3.2",
-    "@nestjs/schematics": "^10.1.1",
-    "@nestjs/testing": "^10.3.0",
     "typescript": "^5.4.0",
     "ts-node": "^10.9.2",
     "@types/node": "^20.11.30"
