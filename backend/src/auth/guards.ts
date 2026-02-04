@@ -1,32 +1,97 @@
-// backend/src/auth/guards.ts
+// ============================================================
+// VNC PLATFORM — AUTH GUARDS
+// Phase-1 CORE SECURITY
+// ============================================================
 
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
-  UnauthorizedException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 
-/**
- * JwtAuthGuard
- * Ensures request has a valid JWT.
- */
+import { User } from '../users/user.entity';
+
+/* ----------------------------------------------------------- */
+/* Base helper                                                  */
+/* ----------------------------------------------------------- */
+
+function extractUser(
+  context: ExecutionContext,
+): User {
+  const request = context
+    .switchToHttp()
+    .getRequest();
+
+  const user = request.user as User | undefined;
+
+  if (!user) {
+    throw new ForbiddenException('AUTH_REQUIRED');
+  }
+
+  return user;
+}
+
+/* ----------------------------------------------------------- */
+/* USER GUARD                                                   */
+/* ----------------------------------------------------------- */
+
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') {}
+export class UserGuard implements CanActivate {
+  canActivate(
+    context: ExecutionContext,
+  ): boolean {
+    const user = extractUser(context);
 
-/**
- * AuthGuards
- * Composite guard helper for shared usage.
- * Can be extended later without touching routes.
- */
+    if (user.status !== 'ACTIVE') {
+      throw new ForbiddenException(
+        'USER_NOT_ACTIVE',
+      );
+    }
+
+    return true;
+  }
+}
+
+/* ----------------------------------------------------------- */
+/* ADMIN GUARD                                                  */
+/* ----------------------------------------------------------- */
+
 @Injectable()
-export class AuthGuards implements CanActivate {
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+export class AdminGuard implements CanActivate {
+  canActivate(
+    context: ExecutionContext,
+  ): boolean {
+    const user = extractUser(context);
 
-    if (!request.user) {
-      throw new UnauthorizedException('AUTH_REQUIRED');
+    if (
+      user.role !== 'ADMIN' &&
+      user.role !== 'OWNER'
+    ) {
+      throw new ForbiddenException(
+        'ADMIN_ONLY',
+      );
+    }
+
+    return true;
+  }
+}
+
+/* ----------------------------------------------------------- */
+/* OWNER GUARD                                                  */
+/* ----------------------------------------------------------- */
+
+@Injectable()
+export class OwnerGuard implements CanActivate {
+  canActivate(
+    context: ExecutionContext,
+  ): boolean {
+    const user = extractUser(context);
+
+    if (user.role !== 'OWNER') {
+      throw new ForbiddenException(
+        'OWNER_ONLY',
+      );
     }
 
     return true;
