@@ -1,4 +1,8 @@
-// backend/src/users/user.entity.ts
+// ============================================================
+// VNC PLATFORM — USER ENTITY
+// Grade: BANK + GOVERNMENT + ZERO-TRUST
+// Phase-1 CORE (COMPILE-SAFE)
+// ============================================================
 
 import {
   Entity,
@@ -9,66 +13,81 @@ import {
   Index,
 } from 'typeorm';
 
-import { SystemRole } from '../core/roles.states';
+export type UserRole =
+  | 'USER'
+  | 'ADMIN'
+  | 'OWNER';
 
-/**
- * USERS TABLE
- * Represents every identity on the VNC platform.
- */
+export type UserStatus =
+  | 'ACTIVE'
+  | 'FROZEN'
+  | 'BLOCKED';
+
 @Entity({ name: 'users' })
 export class User {
+  /* ---------------------------------------------------------- */
+  /* PRIMARY ID                                                 */
+  /* ---------------------------------------------------------- */
+
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  /**
-   * Unique user identifier
-   * (phone / email / external ID)
-   */
-  @Index({ unique: true })
-  @Column({ type: 'varchar', length: 191 })
-  identifier!: string;
+  /* ---------------------------------------------------------- */
+  /* IDENTITY                                                   */
+  /* ---------------------------------------------------------- */
 
-  /**
-   * System role
-   * Derived strictly from roles.states.ts
-   */
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 20 })
+  phone!: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  email?: string;
+
+  /* ---------------------------------------------------------- */
+  /* ROLE & STATE                                               */
+  /* ---------------------------------------------------------- */
+
   @Column({
     type: 'enum',
-    enum: SystemRole,
-    default: SystemRole.USER,
+    enum: ['USER', 'ADMIN', 'OWNER'],
+    default: 'USER',
   })
-  role!: SystemRole;
+  role!: UserRole;
 
-  /**
-   * Account active / suspended flag
-   * Used by auth, risk, admin flows
-   */
-  @Column({ type: 'boolean', default: true })
-  active!: boolean;
+  @Column({
+    type: 'enum',
+    enum: ['ACTIVE', 'FROZEN', 'BLOCKED'],
+    default: 'ACTIVE',
+  })
+  status!: UserStatus;
 
-  /**
-   * Soft risk / compliance freeze
-   * (wallet, trade, mining respect this)
-   */
+  /* ---------------------------------------------------------- */
+  /* COMPLIANCE                                                 */
+  /* ---------------------------------------------------------- */
+
+  @Column({ type: 'varchar', length: 3, default: 'IN' })
+  countryCode!: string;
+
+  @Column({ type: 'boolean', default: false })
+  kycVerified!: boolean;
+
+  /* ---------------------------------------------------------- */
+  /* SECURITY FLAGS                                             */
+  /* ---------------------------------------------------------- */
+
   @Column({ type: 'boolean', default: false })
   frozen!: boolean;
 
-  /**
-   * Last activity timestamp
-   * Updated opportunistically
-   */
-  @Column({ type: 'timestamp', nullable: true })
-  lastActiveAt!: Date | null;
+  @Column({ type: 'boolean', default: false })
+  riskFlag!: boolean;
 
-  /**
-   * Record creation timestamp
-   */
-  @CreateDateColumn({ type: 'timestamp' })
+  /* ---------------------------------------------------------- */
+  /* AUDIT                                                     */
+  /* ---------------------------------------------------------- */
+
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 
-  /**
-   * Record update timestamp
-   */
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt!: Date;
 }
