@@ -1,78 +1,122 @@
-// backend/src/owner/owner.service.ts
+// ============================================================
+// VNC PLATFORM — OWNER SERVICE
+// File: backend/src/owner/owner.service.ts
+// Grade: BANK + MILITARY + RBI
+// FINAL MASTER HARD-LOCK v6.7.0.4
+// ============================================================
 
-import { Injectable } from '@nestjs/common';
-
-import { KillSwitch } from './kill.switch';
-import { FeatureFlag, FeatureFlags } from '../core/feature.flags';
 import {
-  CountryRule,
-  getCountryRule,
-  setCountryRule,
-} from '../core/country.rules';
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+
+import { UsersService } from '../users/users.service';
+import { ZeroTrustGate } from '../security/zero.trust';
+import { KillSwitch } from './kill.switch';
+import { FeatureFlags } from '../core/feature.flags';
+import { CountryRules } from '../core/country.rules';
 
 @Injectable()
 export class OwnerService {
-  private readonly featureFlags = new FeatureFlags();
-
   constructor(
+    private readonly usersService: UsersService,
     private readonly killSwitch: KillSwitch,
+    private readonly featureFlags: FeatureFlags,
+    private readonly countryRules: CountryRules,
   ) {}
 
-  /**
-   * Get global system status snapshot
-   */
-  async getSystemStatus() {
+  /* ---------------------------------------------------------- */
+  /* INTERNAL ZERO-TRUST OWNER CHECK                             */
+  /* ---------------------------------------------------------- */
+
+  private async verifyOwner(ownerId: string) {
+    const owner = await this.usersService.findById(ownerId);
+    if (!owner) throw new NotFoundException('OWNER_NOT_FOUND');
+
+    const zt = new ZeroTrustGate(this.killSwitch);
+    const decision = zt.verify({
+      userId: owner.id,
+      role: owner.role,
+      userFrozen: owner.isFrozen,
+      action: 'OWNER',
+    });
+
+    if (!decision.allowed) {
+      throw new ForbiddenException(decision.reason);
+    }
+
+    return owner;
+  }
+
+  /* ---------------------------------------------------------- */
+  /* SYSTEM STATUS                                              */
+  /* ---------------------------------------------------------- */
+
+  async getSystemStatus(ownerId: string) {
+    await this.verifyOwner(ownerId);
+
     return {
-      features: this.featureFlags.getAll(),
-      killSwitch: this.killSwitch.getStatus(),
+      systemFrozen: this.killSwitch.isActive(),
+      features: this.featureFlags.snapshot(),
+      countryRules: this.countryRules.snapshot(),
       timestamp: new Date(),
     };
   }
 
-  /**
-   * Enable or disable a platform feature
-   */
-  async toggleFeature(
+  /* ---------------------------------------------------------- */
+  /* FEATURE TOGGLE CONTROL                                     */
+  /* ---------------------------------------------------------- */
+
+  async setFeatureFlag(
+    ownerId: string,
     feature: string,
     enabled: boolean,
-  ) {
-    const flag = feature as FeatureFlag;
+  ): Promise<void> {
+    await this.verifyOwner(ownerId);
 
-    this.featureFlags.set(flag, enabled);
+    if (!this.featureFlags.exists(feature)) {
+      throw new BadRequestException('UNKNOWN_FEATURE');
+    }
 
-    return {
-      feature: flag,
-      enabled,
-      timestamp: new Date(),
-    };
+    this.featureFlags.set(feature, enabled);
   }
 
-  /**
-   * Update country policy
-   */
-  async updateCountryRule(
+  /* ---------------------------------------------------------- */
+  /* COUNTRY RULE CONTROL                                       */
+  /* ---------------------------------------------------------- */
+
+  async setCountryRule(
+    ownerId: string,
     countryCode: string,
-    policy: CountryRule['policy'],
-  ) {
-    setCountryRule(countryCode, policy);
+    allowed: boolean,
+  ): Promise<void> {
+    await this.verifyOwner(ownerId);
 
-    return {
-      countryCode,
-      policy,
-      updatedAt: new Date(),
-    };
+    if (!countryCode || countryCode.length !== 2) {
+      throw new BadRequestException('INVALID_COUNTRY_CODE');
+    }
+
+    this.countryRules.set(countryCode.toUpperCase(), allowed);
   }
 
-  /**
-   * Trigger emergency kill switch
-   */
-  async triggerKillSwitch(reason?: string) {
-    this.killSwitch.activate(reason);
+  /* ---------------------------------------------------------- */
+  /* EMERGENCY KILL SWITCH                                      */
+  /* ---------------------------------------------------------- */
 
-    return {
-      status: 'KILL_SWITCH_ACTIVATED',
-      reason: reason ?? 'UNSPECIFIED',
-      timestamp: new Date(),
-    };
+  async activateEmergencyFreeze(
+    ownerId: string,
+    reason: string,
+  ): Promise<void> {
+    await this.verifyOwner(ownerId);
+    this.killSwitch.activate(reason);
+  }
+
+  async deactivateEmergencyFreeze(
+    ownerId: string,
+  ): Promise<void> {
+    await this.verifyOwner(ownerId);
+    this.killSwitch.deactivate();
   }
 }
