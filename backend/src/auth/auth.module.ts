@@ -1,42 +1,38 @@
-// backend/src/auth/auth.module.ts
+// ============================================================
+// VNC PLATFORM — AUTH MODULE
+// Phase-1 CORE WIRING
+// ============================================================
 
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
 
-import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { OtpService } from './otp.service';
-import { JwtStrategy } from './jwt.strategy';
-import { AuthGuards } from './guards';
+import { AuthController } from './auth.controller';
 
-import { SecretProvider } from '../config/secrets/secret.provider';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
-    PassportModule.register({ defaultStrategy: 'jwt' }),
+    UsersModule,
 
-    JwtModule.registerAsync({
-      inject: [SecretProvider],
-      useFactory: async (secrets: SecretProvider) => ({
-        secret: secrets.jwtSecret(),
-        signOptions: {
-          expiresIn: process.env.JWT_EXPIRES_IN,
-        },
-      }),
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || 'DEV_SECRET_ONLY',
+      signOptions: {
+        expiresIn: '15m',
+      },
     }),
   ],
-  controllers: [AuthController],
+
   providers: [
     AuthService,
-    OtpService,
-    JwtStrategy,
-    AuthGuards,
   ],
+
+  controllers: [
+    AuthController,
+  ],
+
   exports: [
     AuthService,
-    JwtModule,
-    PassportModule,
   ],
 })
 export class AuthModule {}
