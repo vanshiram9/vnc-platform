@@ -1,61 +1,60 @@
-// backend/src/app.controller.ts
+// ============================================================
+// VNC PLATFORM — APP CONTROLLER
+// Phase-1 CORE (HEALTH + SANITY)
+// ============================================================
 
-import {
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
-import { AppService } from './app.service';
+import { Controller, Get } from '@nestjs/common';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  private readonly startedAt = Date.now();
 
-  /**
-   * Liveness Probe
-   * Used by load balancer / container runtime
-   */
-  @Get('/health')
-  @HttpCode(HttpStatus.OK)
-  health() {
+  /* --------------------------------------------------------- */
+  /* BASIC HEALTH CHECK                                        */
+  /* --------------------------------------------------------- */
+
+  @Get('/')
+  health(): {
+    status: 'ok';
+    service: 'vnc-backend';
+    timestamp: string;
+  } {
     return {
       status: 'ok',
-      service: 'VNC-PLATFORM',
+      service: 'vnc-backend',
       timestamp: new Date().toISOString(),
     };
   }
 
-  /**
-   * Readiness Probe
-   * Confirms system is bootstrapped and safe to receive traffic
-   */
+  /* --------------------------------------------------------- */
+  /* READINESS CHECK                                          */
+  /* --------------------------------------------------------- */
+
   @Get('/ready')
-  @HttpCode(HttpStatus.OK)
-  readiness() {
-    return this.appService.readiness();
-  }
-
-  /**
-   * Version & Build Metadata
-   * Audit / regulator / admin visibility
-   */
-  @Get('/version')
-  @HttpCode(HttpStatus.OK)
-  version() {
-    return this.appService.version();
-  }
-
-  /**
-   * Root Endpoint
-   * No sensitive data, no debug leakage
-   */
-  @Get('/')
-  @HttpCode(HttpStatus.OK)
-  root() {
+  readiness(): {
+    ready: true;
+    uptime_ms: number;
+  } {
     return {
-      platform: 'VNC PLATFORM',
-      status: 'running',
+      ready: true,
+      uptime_ms: Date.now() - this.startedAt,
+    };
+  }
+
+  /* --------------------------------------------------------- */
+  /* VERSION CHECK                                            */
+  /* --------------------------------------------------------- */
+
+  @Get('/version')
+  version(): {
+    platform: 'VNC';
+    version: string;
+    phase: 'phase-1-core';
+  } {
+    return {
+      platform: 'VNC',
+      version: '6.7.0.4',
+      phase: 'phase-1-core',
     };
   }
 }
