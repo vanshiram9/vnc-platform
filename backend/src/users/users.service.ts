@@ -1,11 +1,18 @@
-// backend/src/users/users.service.ts
+// ============================================================
+// VNC PLATFORM — USERS SERVICE
+// Grade: BANK + GOVERNMENT + ZERO-TRUST
+// Phase-1 CORE (AUTHORITATIVE SERVICE)
+// ============================================================
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { User } from './user.entity';
-import { SystemRole } from '../core/roles.states';
+import { User, UserRole, UserStatus } from './user.entity';
 
 @Injectable()
 export class UsersService {
@@ -14,13 +21,13 @@ export class UsersService {
     private readonly userRepo: Repository<User>,
   ) {}
 
-  /**
-   * Fetch user by identifier (phone/email)
-   * Throws if not found.
-   */
-  async getByIdentifier(identifier: string): Promise<User> {
+  /* ---------------------------------------------------------- */
+  /* CREATE / FETCH                                             */
+  /* ---------------------------------------------------------- */
+
+  async findById(userId: string): Promise<User> {
     const user = await this.userRepo.findOne({
-      where: { identifier },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -30,36 +37,104 @@ export class UsersService {
     return user;
   }
 
-  /**
-   * Ensure user exists.
-   * Creates a minimal USER record if absent.
-   * Used by auth/bootstrap flows.
-   */
-  async ensureUser(identifier: string): Promise<User> {
-    let user = await this.userRepo.findOne({
-      where: { identifier },
+  async findByPhone(phone: string): Promise<User | null> {
+    return this.userRepo.findOne({
+      where: { phone },
     });
-
-    if (!user) {
-      user = this.userRepo.create({
-        identifier,
-        role: SystemRole.USER,
-        active: true,
-      });
-      await this.userRepo.save(user);
-    }
-
-    return user;
   }
 
-  /**
-   * Update last active timestamp
-   * Lightweight, optional call by downstream modules
-   */
-  async touch(userId: string): Promise<void> {
-    await this.userRepo.update(
-      { id: userId },
-      { lastActiveAt: new Date() },
-    );
+  async createUser(
+    phone: string,
+    role: UserRole = 'USER',
+  ): Promise<User> {
+    if (!phone) {
+      throw new BadRequestException('PHONE_REQUIRED');
+    }
+
+    const existing = await this.findByPhone(phone);
+    if (existing) {
+      return existing;
+    }
+
+    const user = this.userRepo.create({
+      phone,
+      role,
+      status: 'ACTIVE',
+      frozen: false,
+      riskFlag: false,
+      kycVerified: false,
+    });
+
+    return this.userRepo.save(user);
+  }
+
+  /* ---------------------------------------------------------- */
+  /* STATE MANAGEMENT                                           */
+  /* ---------------------------------------------------------- */
+
+  async freezeUser(userId: string): Promise<User> {
+    const user = await this.findById(userId);
+
+    user.status = 'FROZEN';
+    user.frozen = true;
+
+    return this.userRepo.save(user);
+  }
+
+  async unfreezeUser(userId: string): Promise<User> {
+    const user = await this.findById(userId);
+
+    user.status = 'ACTIVE';
+    user.frozen = false;
+
+    return this.userRepo.save(user);
+  }
+
+  async blockUser(userId: string): Promise<User> {
+    const user = await this.findById(userId);
+
+    user.status = 'BLOCKED';
+    user.frozen = true;
+
+    return this.userRepo.save(user);
+  }
+
+  /* ---------------------------------------------------------- */
+  /* ROLE MANAGEMENT                                            */
+  /* ---------------------------------------------------------- */
+
+  async setRole(
+    userId: string,
+    role: UserRole,
+  ): Promise<User> {
+    const user = await this.findById(userId);
+    user.role = role;
+    return this.userRepo.save(user);
+  }
+
+  /* ---------------------------------------------------------- */
+  /* COMPLIANCE FLAGS                                           */
+  /* ---------------------------------------------------------- */
+
+  async markKycVerified(
+    userId: string,
+  ): Promise<User> {
+    const user = await this.findById(userId);
+    user.kycVerified = true;
+    return this.userRepo.save(user);
+  }
+
+  /* ---------------------------------------------------------- */
+  /* ADMIN / AUDIT                                              */
+  /* ---------------------------------------------------------- */
+
+  async getAll(): Promise<User[]> {
+    return this.userRepo.find({
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async countAll(): Promise<number> {
+    return this.userRepo.count();
   }
 }
