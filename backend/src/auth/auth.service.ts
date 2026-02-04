@@ -1,93 +1,120 @@
 // ============================================================
 // VNC PLATFORM — AUTH SERVICE
-// File: backend/src/auth/auth.service.ts
-// Grade: BANK + MILITARY + RBI
-// FINAL MASTER HARD-LOCK v6.7.0.4
+// Phase-1 CORE (OTP + USER WIRING)
 // ============================================================
 
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
-import { ZeroTrustGate } from '../security/zero.trust';
 import { UsersService } from '../users/users.service';
-import { OtpService } from './otp.service';
-import { KillSwitch } from '../owner/kill.switch';
+import { User } from '../users/user.entity';
+
+/* ----------------------------------------------------------- */
+/* SIMPLE IN-MEMORY OTP STORE (PHASE-1 ONLY)                   */
+/* ----------------------------------------------------------- */
+
+interface OtpRecord {
+  code: string;
+  expiresAt: number;
+}
 
 @Injectable()
 export class AuthService {
+  private readonly otpStore = new Map<
+    string,
+    OtpRecord
+  >();
+
   constructor(
     private readonly usersService: UsersService,
-    private readonly otpService: OtpService,
     private readonly jwtService: JwtService,
-    private readonly killSwitch: KillSwitch,
   ) {}
 
-  /* ---------------------------------------------------------- */
-  /* AUTH ENTRY — LOGIN REQUEST                                  */
-  /* ---------------------------------------------------------- */
+  /* --------------------------------------------------------- */
+  /* OTP GENERATION                                            */
+  /* --------------------------------------------------------- */
 
-  async requestLogin(phone: string): Promise<void> {
-    // 🔒 ZERO TRUST — AUTH ENTRY
-    const zt = new ZeroTrustGate(this.killSwitch);
-    const decision = zt.verify({
-      userId: phone,
-      action: 'AUTH',
+  async requestOtp(
+    phone: string,
+  ): Promise<{ success: true }> {
+    if (!phone) {
+      throw new UnauthorizedException(
+        'PHONE_REQUIRED',
+      );
+    }
+
+    // Ensure user exists (idempotent)
+    await this.usersService.createUser(phone);
+
+    const code = this.generateOtp();
+    const expiresAt =
+      Date.now() + 5 * 60 * 1000; // 5 min
+
+    this.otpStore.set(phone, {
+      code,
+      expiresAt,
     });
 
-    if (!decision.allowed) {
-      throw new UnauthorizedException(decision.reason);
-    }
+    // NOTE:
+    // In Phase-1 we DO NOT send SMS.
+    // OTP delivery is out of scope here.
 
-    // Validate phone existence
-    const user = await this.usersService.findByPhone(phone);
-    if (!user) {
-      throw new UnauthorizedException('USER_NOT_FOUND');
-    }
-
-    // OTP generation (rate + retry limits enforced inside service)
-    await this.otpService.generateOtp(user.id);
+    return { success: true };
   }
 
-  /* ---------------------------------------------------------- */
-  /* AUTH VERIFY — OTP CONFIRM                                  */
-  /* ---------------------------------------------------------- */
+  /* --------------------------------------------------------- */
+  /* OTP VERIFICATION + TOKEN                                  */
+  /* --------------------------------------------------------- */
 
-  async verifyOtp(
+  async verifyOtpAndIssueToken(
     phone: string,
-    otp: string,
+    code: string,
   ): Promise<{ accessToken: string }> {
-    const user = await this.usersService.findByPhone(phone);
+    const record = this.otpStore.get(phone);
+
+    if (
+      !record ||
+      record.code !== code ||
+      record.expiresAt < Date.now()
+    ) {
+      throw new UnauthorizedException(
+        'INVALID_OTP',
+      );
+    }
+
+    const user =
+      await this.usersService.findByPhone(phone);
+
     if (!user) {
-      throw new UnauthorizedException('USER_NOT_FOUND');
+      throw new UnauthorizedException(
+        'USER_NOT_FOUND',
+      );
     }
 
-    // 🔒 ZERO TRUST — PRE-AUTH DECISION
-    const zt = new ZeroTrustGate(this.killSwitch);
-    const decision = zt.verify({
-      userId: user.id,
-      role: user.role,
-      userFrozen: user.isFrozen,
-      action: 'AUTH',
-    });
+    // OTP used → invalidate
+    this.otpStore.delete(phone);
 
-    if (!decision.allowed) {
-      throw new UnauthorizedException(decision.reason);
-    }
-
-    // OTP validation
-    const valid = await this.otpService.verifyOtp(user.id, otp);
-    if (!valid) {
-      throw new UnauthorizedException('INVALID_OTP');
-    }
-
-    // JWT issue (short-lived, stateless)
     const payload = {
       sub: user.id,
       role: user.role,
     };
 
-    const accessToken = await this.jwtService.signAsync(payload);
+    const accessToken =
+      this.jwtService.sign(payload);
 
     return { accessToken };
+  }
+
+  /* --------------------------------------------------------- */
+  /* INTERNAL HELPERS                                          */
+  /* --------------------------------------------------------- */
+
+  private generateOtp(): string {
+    return Math.floor(
+      100000 + Math.random() * 900000,
+    ).toString();
   }
 }
