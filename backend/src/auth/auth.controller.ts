@@ -1,52 +1,45 @@
-// backend/src/auth/auth.controller.ts
+// ============================================================
+// VNC PLATFORM — AUTH CONTROLLER
+// Phase-1 CORE (COMPILE-SAFE)
+// ============================================================
 
 import {
-  Body,
   Controller,
-  HttpCode,
-  HttpStatus,
   Post,
+  Body,
 } from '@nestjs/common';
 
 import { AuthService } from './auth.service';
 
-interface LoginRequest {
-  identifier: string; // phone / email
-}
-
-interface OtpVerifyRequest {
-  identifier: string;
-  otp: string;
-}
-
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+  ) {}
 
-  /**
-   * Step 1: Login / Register entry
-   * Sends OTP to user identifier
-   */
-  @Post('login')
-  @HttpCode(HttpStatus.OK)
-  async login(@Body() body: LoginRequest) {
-    const { identifier } = body;
+  /* --------------------------------------------------------- */
+  /* REQUEST OTP                                               */
+  /* --------------------------------------------------------- */
 
-    return this.authService.requestOtp(identifier);
+  @Post('request-otp')
+  async requestOtp(
+    @Body('phone') phone: string,
+  ): Promise<{ success: true }> {
+    return this.authService.requestOtp(phone);
   }
 
-  /**
-   * Step 2: Verify OTP
-   * Issues JWT on success
-   */
-  @Post('verify-otp')
-  @HttpCode(HttpStatus.OK)
-  async verifyOtp(@Body() body: OtpVerifyRequest) {
-    const { identifier, otp } = body;
+  /* --------------------------------------------------------- */
+  /* VERIFY OTP + ISSUE TOKEN                                  */
+  /* --------------------------------------------------------- */
 
+  @Post('verify-otp')
+  async verifyOtp(
+    @Body('phone') phone: string,
+    @Body('code') code: string,
+  ): Promise<{ accessToken: string }> {
     return this.authService.verifyOtpAndIssueToken(
-      identifier,
-      otp,
+      phone,
+      code,
     );
   }
 }
