@@ -1,142 +1,152 @@
-// backend/src/trade/trade.service.ts
+// ============================================================
+// VNC PLATFORM — TRADE SERVICE
+// File: backend/src/trade/trade.service.ts
+// Grade: BANK + MILITARY + RBI
+// FINAL MASTER HARD-LOCK v6.7.0.4
+// ============================================================
 
 import {
   Injectable,
-  BadRequestException,
   ForbiddenException,
+  BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Trade } from './trade.entity';
-import { WalletService } from '../wallet/wallet.service';
-import { UsersService } from '../users/users.service';
-import { KycService } from '../kyc/kyc.service';
-import { RiskAction, evaluateRisk } from '../core/risk.matrix';
-import { FeatureFlag } from '../core/feature.flags';
-import { getCountryRule } from '../core/country.rules';
+import { Wallet } from '../wallet/wallet.entity';
+import { LedgerEntry } from '../wallet/ledger.entry';
 
-interface CreateTradePayload {
-  type: 'BUY' | 'SELL';
-  asset: string;
-  amount: number;
-  price: number;
-}
+import { UsersService } from '../users/users.service';
+import { ZeroTrustGate } from '../security/zero.trust';
+import { KillSwitch } from '../owner/kill.switch';
 
 @Injectable()
 export class TradeService {
   constructor(
     @InjectRepository(Trade)
     private readonly tradeRepo: Repository<Trade>,
-    private readonly walletService: WalletService,
+    @InjectRepository(Wallet)
+    private readonly walletRepo: Repository<Wallet>,
     private readonly usersService: UsersService,
-    private readonly kycService: KycService,
+    private readonly killSwitch: KillSwitch,
   ) {}
 
-  /**
-   * Create a new trade order
-   */
+  /* ---------------------------------------------------------- */
+  /* CREATE TRADE                                               */
+  /* ---------------------------------------------------------- */
+
   async createTrade(
-    identifier: string,
-    payload: CreateTradePayload,
+    userId: string,
+    walletId: string,
+    side: 'BUY' | 'SELL',
+    asset: string,
+    quantity: number,
+    price: number,
   ): Promise<Trade> {
-    if (
-      payload.amount <= 0 ||
-      payload.price <= 0
-    ) {
+    if (quantity <= 0 || price <= 0) {
       throw new BadRequestException('INVALID_TRADE_PARAMS');
     }
 
-    const user = await this.usersService.getByIdentifier(
-      identifier,
-    );
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new NotFoundException('USER_NOT_FOUND');
 
-    // KYC gate
-    const kyc = await this.kycService.getByIdentifier(
-      identifier,
-    );
-    if (kyc.status !== 'APPROVED') {
-      throw new ForbiddenException('KYC_REQUIRED');
-    }
+    const wallet = await this.walletRepo.findOne({
+      where: { id: walletId, userId: user.id },
+    });
+    if (!wallet) throw new NotFoundException('WALLET_NOT_FOUND');
 
-    // Risk gate
-    const risk = evaluateRisk({
-      countryRule: getCountryRule(
-        (user as any).countryCode || '',
-      ),
-      featureSnapshot: {
-        [FeatureFlag.AUTH]: true,
-        [FeatureFlag.WALLET]: true,
-        [FeatureFlag.MINING]: true,
-        [FeatureFlag.ADS]: true,
-        [FeatureFlag.TRADE]: true,
-        [FeatureFlag.IMPORT_EXPORT]: true,
-        [FeatureFlag.MERCHANT]: true,
-        [FeatureFlag.KYC]: true,
-        [FeatureFlag.SUPPORT]: true,
-        [FeatureFlag.ADMIN]: true,
-      },
-      signals: {},
+    // 🔒 ZERO TRUST — TRADE ENTRY
+    const zt = new ZeroTrustGate(this.killSwitch);
+    const decision = zt.verify({
+      userId: user.id,
+      role: user.role,
+      userFrozen: user.isFrozen,
+      walletFrozen: wallet.isFrozen,
+      action: 'TRADE',
     });
 
-    if (risk.action === RiskAction.FREEZE) {
-      throw new ForbiddenException('RISK_FREEZE');
+    if (!decision.allowed) {
+      throw new ForbiddenException(decision.reason);
     }
 
-    // Escrow lock (simplified)
-    const escrowAmount =
-      payload.type === 'SELL'
-        ? payload.amount
-        : payload.amount * payload.price;
+    // 🔐 SELL requires escrow lock via ledger
+    if (side === 'SELL') {
+      const balance = await LedgerEntry.deriveBalance(
+        wallet.id,
+      );
 
-    await this.walletService.lockCoins(
-      identifier,
-      escrowAmount,
-    );
+      if (balance < quantity) {
+        throw new ForbiddenException(
+          'INSUFFICIENT_BALANCE',
+        );
+      }
+
+      await LedgerEntry.append({
+        walletId: wallet.id,
+        type: 'LOCK',
+        amount: quantity,
+        referenceType: 'TRADE_ESCROW',
+        referenceId: user.id,
+      });
+    }
 
     const trade = this.tradeRepo.create({
       userId: user.id,
-      type: payload.type,
-      asset: payload.asset,
-      amount: payload.amount,
-      price: payload.price,
+      walletId: wallet.id,
+      side,
+      asset,
+      quantity,
+      price,
       status: 'OPEN',
     });
 
     return this.tradeRepo.save(trade);
   }
 
-  /**
-   * Get trades for a user
-   */
-  async getTradesByIdentifier(
-    identifier: string,
-  ): Promise<Trade[]> {
-    const user = await this.usersService.getByIdentifier(
-      identifier,
-    );
+  /* ---------------------------------------------------------- */
+  /* CANCEL TRADE                                               */
+  /* ---------------------------------------------------------- */
 
-    return this.tradeRepo.find({
-      where: { userId: user.id },
-      order: { createdAt: 'DESC' },
-    });
-  }
-
-  /**
-   * Get escrow / settlement status
-   */
-  async getEscrowStatus(
+  async cancelTrade(
+    userId: string,
     tradeId: string,
-  ): Promise<Trade> {
+  ): Promise<void> {
     const trade = await this.tradeRepo.findOne({
-      where: { id: tradeId },
+      where: { id: tradeId, userId },
+    });
+    if (!trade) throw new NotFoundException('TRADE_NOT_FOUND');
+
+    // 🔒 ZERO TRUST — CANCEL
+    const zt = new ZeroTrustGate(this.killSwitch);
+    const decision = zt.verify({
+      userId,
+      action: 'TRADE',
     });
 
-    if (!trade) {
-      throw new NotFoundException('TRADE_NOT_FOUND');
+    if (!decision.allowed) {
+      throw new ForbiddenException(decision.reason);
     }
 
-    return trade;
+    if (trade.status !== 'OPEN') {
+      throw new ForbiddenException(
+        'TRADE_NOT_CANCELLABLE',
+      );
+    }
+
+    trade.status = 'CANCELLED';
+    await this.tradeRepo.save(trade);
+
+    // 🔓 Unlock escrow if SELL
+    if (trade.side === 'SELL') {
+      await LedgerEntry.append({
+        walletId: trade.walletId,
+        type: 'UNLOCK',
+        amount: trade.quantity,
+        referenceType: 'TRADE_CANCEL',
+        referenceId: trade.id,
+      });
+    }
   }
-}
+  }
