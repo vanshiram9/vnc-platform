@@ -1,0 +1,62 @@
+name: vnc_platform
+description: VNC Platform — Secure Mobile Client
+publish_to: 'none'
+
+# Client version aligned with backend FINAL MASTER HARD-LOCK
+version: 6.7.0+1
+
+environment:
+  sdk: ">=3.2.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Core UI
+  cupertino_icons: ^1.0.6
+  flutter_svg: ^2.0.9
+
+  # State management
+  provider: ^6.1.1
+
+  # Networking (backend is source of truth)
+  dio: ^5.4.0
+
+  # Secure storage (JWT, device binding)
+  flutter_secure_storage: ^9.0.0
+  shared_preferences: ^2.2.2
+
+  # Utilities
+  intl: ^0.19.0
+  uuid: ^4.2.1
+
+  # Platform / app metadata
+  package_info_plus: ^5.0.1
+
+  # QR / Scan (wallet, merchant, payments)
+  mobile_scanner: ^4.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+
+  # Locked assets (tree-exact)
+  assets:
+    - assets/logos/
+    - assets/icons/
+    - assets/images/
+
+  # Locked fonts
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
